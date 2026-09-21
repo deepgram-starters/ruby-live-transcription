@@ -27,6 +27,9 @@ COPY Gemfile Gemfile.lock ./
 RUN bundle config set --local deployment true && \
     bundle config set --local without development test && \
     bundle install
+COPY app.rb ./
+COPY test/ ./test/
+RUN DEEPGRAM_API_KEY=test-key bundle exec ruby -Itest test/deepgram_url_test.rb
 
 # Stage 4: Runtime
 FROM ruby:3.3-alpine

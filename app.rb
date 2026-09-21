@@ -90,6 +90,7 @@ def build_deepgram_url(request_params)
     'punctuate'    => 'true',
     'diarize'      => 'false',
     'filler_words' => 'false',
+    'interim_results' => 'true',
     'encoding'     => 'linear16',
     'sample_rate'  => '16000',
     'channels'     => '1'
