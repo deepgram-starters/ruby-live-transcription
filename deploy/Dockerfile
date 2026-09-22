@@ -2,7 +2,7 @@
 FROM golang:1.23-alpine AS caddy-builder
 WORKDIR /build
 RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
-RUN xcaddy build --with github.com/mholt/caddy-ratelimit
+RUN xcaddy build v2.9.1 --with github.com/mholt/caddy-ratelimit
 # Binary output: /build/caddy
 
 # Stage 2: Build frontend
@@ -24,7 +24,8 @@ WORKDIR /build
 RUN apk add --no-cache build-base
 
 COPY Gemfile Gemfile.lock ./
-RUN bundle config set --local deployment true && \
+RUN mkdir -p .bundle && \
+    bundle config set --local deployment true && \
     bundle config set --local without development test && \
     bundle install
 COPY app.rb ./

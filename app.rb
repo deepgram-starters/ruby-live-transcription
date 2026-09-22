@@ -90,7 +90,7 @@ def build_deepgram_url(request_params)
     'punctuate'    => 'true',
     'diarize'      => 'false',
     'filler_words' => 'false',
-    'interim_results' => 'true',
+    'interim_results' => 'false',
     'encoding'     => 'linear16',
     'sample_rate'  => '16000',
     'channels'     => '1'
@@ -103,6 +103,19 @@ def build_deepgram_url(request_params)
 
   uri.query = query_parts.join('&')
   uri.to_s
+end
+
+# websocket-driver uses arrays to distinguish binary frames from text strings.
+def websocket_frame(data)
+  return data.bytes if data.is_a?(String) && data.encoding == Encoding::BINARY
+
+  data
+end
+
+def browser_close_code(code)
+  return code if code == 1000 || (3000..4999).cover?(code)
+
+  1011
 end
 
 # ============================================================================
@@ -178,12 +191,13 @@ class WebSocketMiddleware
     # Forward Deepgram messages to client
     deepgram_ws.on :message do |event|
       deepgram_msg_count += 1
-      is_binary = event.data.is_a?(Array)
+      payload = websocket_frame(event.data)
+      is_binary = payload.is_a?(Array)
       if deepgram_msg_count % 10 == 0 || !is_binary
-        data_size = is_binary ? event.data.length : event.data.bytesize
+        data_size = is_binary ? payload.length : payload.bytesize
         puts "Deepgram message ##{deepgram_msg_count} (binary: #{is_binary}, size: #{data_size})"
       end
-      ws.send(event.data) if ws
+      ws.send(payload) if ws
     end
 
     deepgram_ws.on :error do |event|
@@ -193,7 +207,7 @@ class WebSocketMiddleware
 
     deepgram_ws.on :close do |event|
       puts "Deepgram connection closed: #{event.code} #{event.reason}"
-      ws.close(event.code, event.reason) if ws
+      ws.close(browser_close_code(event.code), event.reason) if ws
       deepgram_ws = nil
     end
 
@@ -206,12 +220,13 @@ class WebSocketMiddleware
     # Forward client messages to Deepgram
     ws.on :message do |event|
       client_msg_count += 1
-      is_binary = event.data.is_a?(Array)
+      payload = websocket_frame(event.data)
+      is_binary = payload.is_a?(Array)
       if client_msg_count % 100 == 0 || !is_binary
-        data_size = is_binary ? event.data.length : event.data.bytesize
+        data_size = is_binary ? payload.length : payload.bytesize
         puts "Client message ##{client_msg_count} (binary: #{is_binary}, size: #{data_size})"
       end
-      deepgram_ws.send(event.data) if deepgram_ws
+      deepgram_ws.send(payload) if deepgram_ws
     end
 
     ws.on :error do |event|
