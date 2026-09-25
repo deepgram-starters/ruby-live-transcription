@@ -1,7 +1,7 @@
 # Ruby Live Transcription Makefile
 # Framework-agnostic commands for managing the project and git submodules
 
-.PHONY: help check check-prereqs init install install-frontend build start start-backend start-frontend test unit-test update clean status eject-frontend
+.PHONY: help check check-prereqs init install install-frontend build start start-backend start-frontend test unit-test deploy-test update clean status eject-frontend
 
 # Default target: show help
 help:
@@ -117,6 +117,18 @@ test:
 # Run the backend unit tests in the same Ruby Docker stage used for deployment.
 unit-test:
 	docker build --target ruby-builder -f deploy/Dockerfile .
+
+# Build the deployed image and verify Caddy can reach the Ruby API.
+deploy-test:
+	docker build -t ruby-live-transcription-test -f deploy/Dockerfile .
+	docker run --rm --detach --name ruby-live-transcription-test -p 18080:8080 -e DEEPGRAM_API_KEY=test-key ruby-live-transcription-test
+	@trap 'docker rm --force ruby-live-transcription-test >/dev/null 2>&1' EXIT; \
+	for attempt in $$(seq 1 20); do \
+		if curl --fail --silent http://127.0.0.1:18080/health; then exit 0; fi; \
+		sleep 1; \
+	done; \
+	docker logs ruby-live-transcription-test; \
+	exit 1
 
 # Update submodules to latest commits
 update:

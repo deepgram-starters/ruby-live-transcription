@@ -35,8 +35,8 @@ RUN DEEPGRAM_API_KEY=test-key bundle exec ruby -Itest test/deepgram_url_test.rb
 # Stage 4: Runtime
 FROM ruby:3.3-alpine
 
-# Install CA certificates for TLS connections to Deepgram
-RUN apk add --no-cache ca-certificates
+# Install runtime libraries for native gems and TLS connections to Deepgram.
+RUN apk add --no-cache ca-certificates libstdc++ openssl-dev
 
 # Copy custom Caddy binary
 COPY --from=caddy-builder /build/caddy /usr/bin/caddy
@@ -45,7 +45,7 @@ WORKDIR /app
 
 # Copy Ruby dependencies
 COPY --from=ruby-builder /build/vendor/ ./vendor/
-COPY --from=ruby-builder /build/.bundle/ ./.bundle/
+COPY --from=ruby-builder /usr/local/bundle/config /usr/local/bundle/config
 
 # Copy application files
 COPY Gemfile Gemfile.lock config.ru puma.rb app.rb ./

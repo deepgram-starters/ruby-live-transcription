@@ -115,7 +115,8 @@ end
 def browser_close_code(code)
   return code if code == 1000 || (3000..4999).cover?(code)
 
-  1011
+  # faye-websocket only accepts 1000 or application-defined 3000-4999 codes.
+  1000
 end
 
 # ============================================================================
@@ -202,7 +203,7 @@ class WebSocketMiddleware
 
     deepgram_ws.on :error do |event|
       puts "Deepgram WebSocket error: #{event.message}"
-      ws.close(1011, 'Deepgram connection error') if ws
+      ws.close(1000, 'Deepgram connection error') if ws
     end
 
     deepgram_ws.on :close do |event|
@@ -231,7 +232,7 @@ class WebSocketMiddleware
 
     ws.on :error do |event|
       puts "Client WebSocket error: #{event.message}"
-      deepgram_ws.close(1011, 'Client error') if deepgram_ws
+      deepgram_ws.close(1000, 'Client error') if deepgram_ws
     end
 
     ws.on :close do |event|
