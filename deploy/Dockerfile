@@ -20,8 +20,8 @@ RUN sed -i 's|<head>|<head>\n  <base href="{{ .Req.Header.Get "X-Base-Path" }}">
 FROM ruby:3.3-alpine AS ruby-builder
 WORKDIR /build
 
-# Install build dependencies for native extensions
-RUN apk add --no-cache build-base
+# EventMachine needs OpenSSL headers while its native extension is compiled.
+RUN apk add --no-cache build-base openssl-dev
 
 COPY Gemfile Gemfile.lock ./
 RUN mkdir -p .bundle && \
@@ -36,7 +36,7 @@ RUN DEEPGRAM_API_KEY=test-key bundle exec ruby -Itest test/deepgram_url_test.rb
 FROM ruby:3.3-alpine
 
 # Install runtime libraries for native gems and TLS connections to Deepgram.
-RUN apk add --no-cache ca-certificates libstdc++ openssl-dev
+RUN apk add --no-cache ca-certificates libstdc++ libssl3 libcrypto3
 
 # Copy custom Caddy binary
 COPY --from=caddy-builder /build/caddy /usr/bin/caddy
