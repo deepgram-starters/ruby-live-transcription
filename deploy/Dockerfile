@@ -2,7 +2,7 @@
 FROM golang:1.23-alpine AS caddy-builder
 WORKDIR /build
 RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
-RUN xcaddy build --with github.com/mholt/caddy-ratelimit
+RUN xcaddy build v2.9.1 --with github.com/mholt/caddy-ratelimit
 # Binary output: /build/caddy
 
 # Stage 2: Build frontend
@@ -20,19 +20,23 @@ RUN sed -i 's|<head>|<head>\n  <base href="{{ .Req.Header.Get "X-Base-Path" }}">
 FROM ruby:3.3-alpine AS ruby-builder
 WORKDIR /build
 
-# Install build dependencies for native extensions
-RUN apk add --no-cache build-base
+# EventMachine needs OpenSSL headers while its native extension is compiled.
+RUN apk add --no-cache build-base openssl-dev
 
 COPY Gemfile Gemfile.lock ./
-RUN bundle config set --local deployment true && \
+RUN mkdir -p .bundle && \
+    bundle config set --local deployment true && \
     bundle config set --local without development test && \
     bundle install
+COPY app.rb ./
+COPY test/ ./test/
+RUN DEEPGRAM_API_KEY=test-key bundle exec ruby -Itest test/deepgram_url_test.rb
 
 # Stage 4: Runtime
 FROM ruby:3.3-alpine
 
-# Install CA certificates for TLS connections to Deepgram
-RUN apk add --no-cache ca-certificates
+# Install runtime libraries for native gems and TLS connections to Deepgram.
+RUN apk add --no-cache ca-certificates libstdc++ libssl3 libcrypto3
 
 # Copy custom Caddy binary
 COPY --from=caddy-builder /build/caddy /usr/bin/caddy
@@ -41,7 +45,7 @@ WORKDIR /app
 
 # Copy Ruby dependencies
 COPY --from=ruby-builder /build/vendor/ ./vendor/
-COPY --from=ruby-builder /build/.bundle/ ./.bundle/
+COPY --from=ruby-builder /usr/local/bundle/config /usr/local/bundle/config
 
 # Copy application files
 COPY Gemfile Gemfile.lock config.ru puma.rb app.rb ./

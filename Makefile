@@ -1,7 +1,7 @@
 # Ruby Live Transcription Makefile
 # Framework-agnostic commands for managing the project and git submodules
 
-.PHONY: help check check-prereqs init install install-frontend build start start-backend start-frontend test update clean status eject-frontend
+.PHONY: help check check-prereqs init install install-frontend build start start-backend start-frontend test unit-test deploy-test update clean status eject-frontend
 
 # Default target: show help
 help:
@@ -113,6 +113,23 @@ test:
 	fi
 	@echo "==> Running contract conformance tests..."
 	@bash contracts/tests/run-live-transcription-app.sh
+
+# Run the backend unit tests in the same Ruby Docker stage used for deployment.
+unit-test:
+	docker build --target ruby-builder -f deploy/Dockerfile .
+
+# Build the deployed image, exercise its TLS WebSocket path, and verify it remains healthy.
+deploy-test:
+	docker build -t ruby-live-transcription-test -f deploy/Dockerfile .
+	docker run --rm --detach --name ruby-live-transcription-test -p 18080:8080 -e DEEPGRAM_API_KEY=test-key ruby-live-transcription-test
+	@set -e; trap 'docker rm --force ruby-live-transcription-test >/dev/null 2>&1' EXIT; \
+	for attempt in $$(seq 1 20); do \
+		if curl --fail --silent http://127.0.0.1:18080/health >/dev/null; then break; fi; \
+		sleep 1; \
+		if [ "$$attempt" = 20 ]; then docker logs ruby-live-transcription-test; exit 1; fi; \
+	done; \
+	docker run --rm --network container:ruby-live-transcription-test node:24-alpine node -e 'const session = await (await fetch("http://127.0.0.1:8080/api/session")).json(); const socket = new WebSocket("ws://127.0.0.1:8080/api/live-transcription?model=nova-3&language=en&encoding=linear16&sample_rate=16000&channels=1", "access_token." + session.token); await new Promise((resolve, reject) => { socket.addEventListener("error", reject, { once: true }); setTimeout(resolve, 3000); }); socket.close();'; \
+	curl --fail --silent http://127.0.0.1:18080/health >/dev/null || { docker logs ruby-live-transcription-test; exit 1; }
 
 # Update submodules to latest commits
 update:
